@@ -1,0 +1,44 @@
+resolve_source() {
+    local hostname="$1"
+
+    # Check if the hostname is in /etc/hosts
+    if grep -q "$hostname" /etc/hosts; then
+        echo "Resolved using /etc/hosts"
+        return
+    fi
+
+    # Use scutil to determine DNS server and query resolution
+    local dns_servers
+    dns_servers=$(scutil --dns | grep "nameserver\[[0-9]*\]" | awk '{print $3}')
+
+    # Use dig to query the hostname
+    for server in $dns_servers; do
+        if dig @"$server" +short "$hostname" > /dev/null 2>&1; then
+            echo "Resolved using DNS server: $server"
+            return
+        fi
+    done
+
+    echo "Resolver source unknown"
+}
+
+resolver_info() {
+    local hostname="$1"
+    resolve_source "$hostname"
+
+    # Run the actual command
+    shift
+    "$@"
+}
+
+curl_resolver() {
+    local host="$(echo "$1" | sed 's|http[s]*://||' | cut -d/ -f1)"
+    resolver_info "$host" curl "$@"
+}
+
+ping_resolver() {
+    resolver_info "$1" ping "$@"
+}
+
+alias curlr="curl_resolver"
+alias pingr="ping_resolver"
